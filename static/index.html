@@ -1,0 +1,1852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clipify — YouTube to Vertical Clips</title>
+  <meta name="description" content="Clipify converts YouTube videos into perfectly cropped 9:16 vertical clips for TikTok, Reels, and Shorts. Powered by AI scene detection and NVIDIA hardware encoding." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    /* ═══════════════════ RESET & TOKENS ═══════════════════ */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg:          #07070c;
+      --bg-card:     #0f0f18;
+      --bg-card2:    #141420;
+      --bg-input:    #181826;
+      --border:      #252538;
+      --border-focus:#00ff88;
+      --accent:      #00ff88;
+      --accent-dim:  #00cc6e;
+      --accent-glow: rgba(0, 255, 136, .15);
+      --accent-glow2:rgba(0, 255, 136, .06);
+      --accent-glow3:rgba(0, 255, 136, .03);
+      --text:        #e8e8f0;
+      --text-mid:    #a0a0b8;
+      --text-dim:    #6e6e88;
+      --danger:      #ff4466;
+      --danger-glow: rgba(255, 68, 102, .1);
+      --warning:     #ffaa22;
+      --radius:      12px;
+      --radius-lg:   20px;
+      --radius-sm:   8px;
+      --font:        'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --transition:  .25s cubic-bezier(.4,0,.2,1);
+      --shadow-card: 0 4px 40px rgba(0,0,0,.4), 0 0 0 1px var(--border);
+    }
+
+    html { font-size: 16px; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ═══════════════════ AMBIENT BACKGROUND ═══════════════════ */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: -1;
+      background:
+        radial-gradient(ellipse 700px 500px at 15% 5%, rgba(0,255,136,.06), transparent 70%),
+        radial-gradient(ellipse 600px 600px at 85% 85%, rgba(0,136,255,.04), transparent 70%),
+        radial-gradient(ellipse 500px 400px at 50% 40%, rgba(136,0,255,.03), transparent 70%);
+      animation: ambientDrift 25s ease-in-out infinite alternate;
+    }
+    @keyframes ambientDrift {
+      0%   { filter: hue-rotate(0deg) brightness(1); }
+      100% { filter: hue-rotate(15deg) brightness(1.1); }
+    }
+
+    /* Noise grain overlay */
+    body::after {
+      content: '';
+      position: fixed; inset: 0; z-index: -1;
+      opacity: .03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      pointer-events: none;
+    }
+
+    /* ═══════════════════ HEALTH BANNER ═══════════════════ */
+    .health-banner {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 0 20px;
+      display: none;
+    }
+    .health-banner.visible { display: block; }
+    .health-banner-inner {
+      margin-top: 12px;
+      padding: 14px 18px;
+      background: var(--danger-glow);
+      border: 1px solid rgba(255, 68, 102, 0.3);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      animation: fadeSlideIn .4s ease;
+    }
+    .health-banner-icon {
+      font-size: 1.2rem;
+      flex-shrink: 0;
+      line-height: 1.4;
+    }
+    .health-banner-text {
+      font-size: .82rem;
+      color: #ffb3c1;
+      line-height: 1.5;
+    }
+    .health-banner-text strong {
+      color: var(--danger);
+      display: block;
+      margin-bottom: 2px;
+    }
+    .health-banner-text code {
+      background: rgba(255,255,255,.08);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: .78rem;
+    }
+
+    /* ═══════════════════ HEADER ═══════════════════ */
+    header {
+      width: 100%;
+      padding: 32px 40px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+    }
+    .logo-icon {
+      width: 46px; height: 46px;
+      background: linear-gradient(135deg, var(--accent), #00b8ff);
+      border-radius: 12px;
+      display: grid; place-items: center;
+      font-size: 24px;
+      box-shadow: 0 0 28px rgba(0,255,136,.3), inset 0 1px 0 rgba(255,255,255,.2);
+      animation: logoPulse 3s ease-in-out infinite;
+      position: relative;
+    }
+    .logo-icon::after {
+      content: '';
+      position: absolute; inset: -4px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, var(--accent), #00b8ff);
+      opacity: .15;
+      filter: blur(8px);
+      z-index: -1;
+    }
+    @keyframes logoPulse {
+      0%, 100% { box-shadow: 0 0 28px rgba(0,255,136,.3), inset 0 1px 0 rgba(255,255,255,.2); transform: scale(1); }
+      50%      { box-shadow: 0 0 44px rgba(0,255,136,.45), inset 0 1px 0 rgba(255,255,255,.2); transform: scale(1.03); }
+    }
+    h1 {
+      font-size: 2rem;
+      font-weight: 900;
+      letter-spacing: -0.8px;
+      background: linear-gradient(135deg, var(--accent) 0%, #66ffbb 50%, #00ddff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .tagline {
+      text-align: center;
+      color: var(--text-dim);
+      font-size: .9rem;
+      margin-top: 6px;
+      font-weight: 400;
+      letter-spacing: .2px;
+    }
+
+    /* ═══════════════════ FEATURES STRIP ═══════════════════ */
+    .features {
+      display: flex;
+      justify-content: center;
+      gap: 28px;
+      margin: 22px 0 30px;
+      flex-wrap: wrap;
+    }
+    .feature {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .78rem;
+      color: var(--text-dim);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+    }
+    .feature-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+    }
+
+    /* ═══════════════════ MAIN CARD ═══════════════════ */
+    main {
+      width: 100%;
+      max-width: 600px;
+      padding: 0 20px 40px;
+    }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 36px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-card);
+    }
+    .card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent 10%, var(--accent) 50%, transparent 90%);
+      opacity: .4;
+    }
+
+    /* ═══════════════════ FORM ELEMENTS ═══════════════════ */
+    label {
+      display: block;
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+    input[type="text"],
+    input[type="number"] {
+      width: 100%;
+      padding: 14px 16px;
+      background: var(--bg-input);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: .93rem;
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
+    }
+    input:hover {
+      border-color: #3a3a52;
+    }
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow), 0 0 20px var(--accent-glow2);
+      background: #1c1c30;
+    }
+    input::placeholder { color: #444460; }
+
+    .form-group { margin-bottom: 22px; }
+
+    /* ═══════════════════ THUMBNAIL PREVIEW ═══════════════════ */
+    .thumb-preview {
+      margin-bottom: 22px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      position: relative;
+      display: none;
+      animation: fadeSlideIn .4s ease;
+    }
+    .thumb-preview.visible { display: block; }
+    .thumb-preview img {
+      width: 100%;
+      height: 160px;
+      object-fit: cover;
+      display: block;
+    }
+    .thumb-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(to top, rgba(7,7,12,.9) 0%, transparent 60%);
+      display: flex;
+      align-items: flex-end;
+      padding: 16px;
+    }
+    .thumb-title {
+      font-size: .85rem;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.4;
+      text-shadow: 0 1px 4px rgba(0,0,0,.5);
+    }
+
+    /* ═══════════════════ MODE TOGGLE ═══════════════════ */
+    .mode-toggle {
+      display: flex;
+      background: var(--bg-input);
+      border-radius: var(--radius);
+      border: 1.5px solid var(--border);
+      overflow: hidden;
+      margin-bottom: 26px;
+      position: relative;
+    }
+    .mode-btn {
+      flex: 1;
+      padding: 14px 16px;
+      font-family: var(--font);
+      font-size: .85rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: all var(--transition);
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .mode-btn:hover:not(.active) { color: var(--text-mid); }
+    .mode-btn.active { color: var(--bg); }
+    .mode-slider {
+      position: absolute;
+      top: 3px; bottom: 3px;
+      width: calc(50% - 4px);
+      left: 3px;
+      background: var(--accent);
+      border-radius: 9px;
+      transition: transform var(--transition);
+      box-shadow: 0 2px 12px rgba(0,255,136,.25);
+      z-index: 0;
+    }
+    .mode-slider.right {
+      transform: translateX(calc(100% + 2px));
+    }
+    .mode-icon { font-size: 1.05rem; }
+
+    /* ═══════════════════ CONDITIONAL FIELDS ═══════════════════ */
+    .fields-manual,
+    .fields-auto {
+      overflow: hidden;
+      transition: max-height .4s ease, opacity .3s ease;
+    }
+    .fields-manual.hidden,
+    .fields-auto.hidden {
+      max-height: 0;
+      opacity: 0;
+      pointer-events: none;
+      margin: 0;
+    }
+    .fields-manual:not(.hidden),
+    .fields-auto:not(.hidden) {
+      max-height: 400px;
+      opacity: 1;
+    }
+    .time-row {
+      display: flex;
+      gap: 14px;
+    }
+    .time-row > .form-group { flex: 1; }
+
+    /* ═══════════════════ SUBMIT BUTTON ═══════════════════ */
+    .btn-primary {
+      width: 100%;
+      padding: 16px 24px;
+      font-family: var(--font);
+      font-size: 1rem;
+      font-weight: 700;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg, var(--accent), #00ddaa, #00ccdd);
+      background-size: 200% 100%;
+      color: #07070c;
+      letter-spacing: .3px;
+      transition: all var(--transition);
+      box-shadow: 0 4px 24px rgba(0,255,136,.2), 0 0 0 1px rgba(0,255,136,.1);
+    }
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 36px rgba(0,255,136,.35), 0 0 0 1px rgba(0,255,136,.2);
+      background-position: 100% 0;
+    }
+    .btn-primary:active:not(:disabled) {
+      transform: translateY(0);
+    }
+    .btn-primary:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+    .btn-primary .spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(10,10,15,.2);
+      border-top-color: #07070c;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    .btn-primary .shortcut-hint {
+      font-size: .72rem;
+      font-weight: 500;
+      opacity: .5;
+      margin-left: 8px;
+      letter-spacing: .3px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ═══════════════════ STATUS PANEL ═══════════════════ */
+    .status-panel {
+      margin-top: 26px;
+      overflow: hidden;
+      transition: max-height .5s ease, opacity .3s ease;
+    }
+    .status-panel.hidden {
+      max-height: 0; opacity: 0; pointer-events: none;
+    }
+    .status-panel:not(.hidden) {
+      max-height: 1200px; opacity: 1;
+    }
+
+    .status-bar {
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+    }
+    .status-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .status-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .status-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+      animation: statusPulse 1.5s ease-in-out infinite;
+    }
+    .status-dot.error { background: var(--danger); animation: none; }
+    .status-dot.done  { background: var(--accent); animation: none; }
+    @keyframes statusPulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--accent); }
+      50%      { opacity: .35; box-shadow: 0 0 2px var(--accent); }
+    }
+    .status-label {
+      font-size: .78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .7px;
+      color: var(--accent);
+    }
+    .status-label.error { color: var(--danger); }
+    .elapsed {
+      font-size: .75rem;
+      font-weight: 500;
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .status-message {
+      font-size: .9rem;
+      color: var(--text-mid);
+      line-height: 1.5;
+      margin-bottom: 14px;
+    }
+
+    /* ═══════════════════ STEP INDICATORS ═══════════════════ */
+    .steps {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .step {
+      flex: 1;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--border);
+      transition: background .5s ease;
+      position: relative;
+    }
+    .step.active {
+      background: var(--accent);
+      box-shadow: 0 0 8px rgba(0,255,136,.3);
+    }
+    .step.done {
+      background: var(--accent-dim);
+    }
+    .step.error {
+      background: var(--danger);
+    }
+
+    /* Progress bar */
+    .progress-track {
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #00ddaa);
+      border-radius: 2px;
+      transition: width .5s ease;
+      position: relative;
+    }
+    .progress-fill::after {
+      content: '';
+      position: absolute;
+      top: 0; right: 0; bottom: 0;
+      width: 80px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.2));
+      animation: shimmer 1.5s ease-in-out infinite;
+    }
+    @keyframes shimmer {
+      0%   { opacity: 0; }
+      50%  { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    /* ═══════════════════ ACTIVITY LOG & ERROR DETAILS ═══════════════════ */
+    .activity-log {
+      margin-top: 18px;
+      padding: 14px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      max-height: 180px;
+      overflow-y: auto;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.75rem;
+      line-height: 1.5;
+      display: none;
+    }
+    .activity-log.visible {
+      display: block;
+    }
+    .log-entry {
+      margin-bottom: 4px;
+      color: var(--text-mid);
+    }
+    .log-ts {
+      color: var(--text-dim);
+      margin-right: 6px;
+    }
+    .log-msg {
+      color: #00ddaa;
+    }
+
+    .error-details {
+      margin-top: 14px;
+      padding: 14px;
+      background: var(--danger-glow);
+      border: 1px solid rgba(255, 68, 102, 0.3);
+      border-radius: var(--radius-sm);
+      display: none;
+    }
+    .error-details.visible {
+      display: block;
+    }
+    .error-details strong {
+      display: block;
+      color: var(--danger);
+      font-size: 0.8rem;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .error-traceback {
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.7rem;
+      color: #ffb3c1;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin: 0;
+    }
+
+    /* ═══════════════════ USER-FRIENDLY ERROR BOX ═══════════════════ */
+    .error-hint {
+      margin-top: 10px;
+      padding: 12px 14px;
+      background: rgba(255, 170, 34, 0.08);
+      border: 1px solid rgba(255, 170, 34, 0.2);
+      border-radius: var(--radius-sm);
+      display: none;
+    }
+    .error-hint.visible { display: block; }
+    .error-hint-title {
+      font-size: .78rem;
+      font-weight: 700;
+      color: var(--warning);
+      margin-bottom: 4px;
+    }
+    .error-hint-text {
+      font-size: .78rem;
+      color: #ddcc88;
+      line-height: 1.5;
+    }
+
+    /* ═══════════════════ DOWNLOAD LINKS ═══════════════════ */
+    .downloads {
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .dl-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      background: var(--accent-glow3);
+      border: 1px solid rgba(0,255,136,.15);
+      border-radius: var(--radius);
+      color: var(--accent);
+      text-decoration: none;
+      font-size: .88rem;
+      font-weight: 600;
+      transition: all var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+    .dl-link::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, transparent 60%, var(--accent-glow));
+      opacity: 0;
+      transition: opacity var(--transition);
+    }
+    .dl-link:hover {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+      transform: translateX(4px);
+    }
+    .dl-link:hover::before { opacity: 1; }
+    .dl-icon { font-size: 1.2rem; flex-shrink: 0; }
+    .dl-link .dl-badge {
+      margin-left: auto;
+      font-size: .7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(0,255,136,.1);
+      color: var(--accent-dim);
+    }
+
+    /* ═══════════════════ RETRY BUTTON ═══════════════════ */
+    .btn-retry {
+      margin-top: 14px;
+      padding: 10px 20px;
+      font-family: var(--font);
+      font-size: .82rem;
+      font-weight: 600;
+      border: 1px solid var(--danger);
+      border-radius: var(--radius-sm);
+      background: var(--danger-glow);
+      color: var(--danger);
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .btn-retry:hover {
+      background: rgba(255,68,102,.2);
+      transform: translateY(-1px);
+    }
+
+    /* ═══════════════════ TOAST ═══════════════════ */
+    .toast-container {
+      position: fixed;
+      top: 20px; right: 20px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .toast {
+      padding: 14px 20px;
+      border-radius: var(--radius);
+      font-size: .85rem;
+      font-weight: 600;
+      color: var(--bg);
+      pointer-events: auto;
+      animation: toastIn .4s ease, toastOut .4s ease 3.6s forwards;
+      box-shadow: 0 8px 32px rgba(0,0,0,.3);
+      max-width: 360px;
+    }
+    .toast.success { background: var(--accent); }
+    .toast.error   { background: var(--danger); color: #fff; }
+    .toast.info    { background: #3388ff; color: #fff; }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(40px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes toastOut {
+      from { opacity: 1; transform: translateX(0); }
+      to   { opacity: 0; transform: translateX(40px); }
+    }
+
+    /* ═══════════════════ CONFETTI ═══════════════════ */
+    .confetti-canvas {
+      position: fixed; inset: 0;
+      z-index: 9998;
+      pointer-events: none;
+    }
+
+    /* ═══════════════════ JOB HISTORY ═══════════════════ */
+    .history-section {
+      margin-top: 24px;
+      display: none;
+    }
+    .history-section.visible { display: block; }
+    .history-title {
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .history-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      transition: all var(--transition);
+      cursor: default;
+    }
+    .history-item:hover {
+      border-color: #3a3a52;
+    }
+    .history-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .history-dot.done  { background: var(--accent); }
+    .history-dot.failed { background: var(--danger); }
+    .history-dot.active { background: var(--warning); animation: statusPulse 1.5s infinite; }
+    .history-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .history-name {
+      font-size: .82rem;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .history-meta {
+      font-size: .72rem;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+    .history-delete {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      font-size: .9rem;
+      cursor: pointer;
+      display: grid; place-items: center;
+      transition: all var(--transition);
+      flex-shrink: 0;
+    }
+    .history-delete:hover {
+      background: var(--danger-glow);
+      color: var(--danger);
+    }
+    .btn-clear-all {
+      margin-left: auto;
+      padding: 4px 12px;
+      font-family: var(--font);
+      font-size: .68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      border: 1px solid rgba(255,68,102,.35);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--danger);
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .btn-clear-all:hover {
+      background: var(--danger-glow);
+      border-color: var(--danger);
+    }
+
+    /* ═══════════════════ FOOTER ═══════════════════ */
+    footer {
+      padding: 24px 20px;
+      text-align: center;
+      color: #333348;
+      font-size: .75rem;
+      letter-spacing: .3px;
+    }
+    footer span { color: var(--accent-dim); }
+
+    /* ═══════════════════ ANIMATIONS ═══════════════════ */
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%      { transform: translateX(-6px); }
+      40%      { transform: translateX(6px); }
+      60%      { transform: translateX(-4px); }
+      80%      { transform: translateX(4px); }
+    }
+
+    /* ═══════════════════ BROWSER AUTH ═══════════════════ */
+    .browser-auth {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 22px;
+      transition: border-color var(--transition);
+    }
+    .browser-auth:hover {
+      border-color: #3a3a52;
+    }
+    .browser-auth.authenticated {
+      border-color: rgba(0, 255, 136, 0.3);
+      background: linear-gradient(135deg, rgba(0, 255, 136, 0.04), rgba(0, 200, 255, 0.02));
+    }
+    .browser-auth-icon {
+      font-size: 1.2rem;
+      flex-shrink: 0;
+      width: 32px; height: 32px;
+      display: grid; place-items: center;
+      background: rgba(255,255,255,0.04);
+      border-radius: 8px;
+    }
+    .browser-auth.authenticated .browser-auth-icon {
+      background: rgba(0, 255, 136, 0.1);
+    }
+    .browser-auth-body {
+      flex: 1;
+      min-width: 0;
+    }
+    .browser-auth-label {
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+      margin-bottom: 2px;
+    }
+    .browser-auth.authenticated .browser-auth-label {
+      color: var(--accent-dim);
+    }
+    .browser-auth-hint {
+      font-size: .75rem;
+      color: var(--text-dim);
+      opacity: 0.7;
+      line-height: 1.3;
+    }
+    .browser-auth select {
+      padding: 8px 28px 8px 10px;
+      background: var(--bg-input);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: .82rem;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' stroke='%236e6e88' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      transition: border-color var(--transition), box-shadow var(--transition);
+      flex-shrink: 0;
+    }
+    .browser-auth select:hover {
+      border-color: #3a3a52;
+    }
+    .browser-auth select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .browser-auth-status {
+      font-size: .72rem;
+      font-weight: 600;
+      color: var(--accent);
+      display: none;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .browser-auth.authenticated .browser-auth-status {
+      display: flex;
+    }
+    .browser-auth.no-browsers select {
+      display: none;
+    }
+    .browser-auth.no-browsers .browser-auth-hint {
+      color: var(--warning);
+      opacity: 1;
+    }
+
+    /* ═══════════════════ RESPONSIVE ═══════════════════ */
+    @media (max-width: 600px) {
+      header { padding: 20px 16px 0; }
+      .card { padding: 24px 18px; }
+      .time-row { flex-direction: column; gap: 0; }
+      .features { gap: 16px; }
+      h1 { font-size: 1.6rem; }
+      .toast-container { left: 16px; right: 16px; }
+      .browser-auth { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <!-- ════════════ HEADER ════════════ -->
+  <header>
+    <div class="logo-icon" aria-hidden="true">✂</div>
+    <h1>Clipify</h1>
+  </header>
+  <p class="tagline">YouTube → Vertical Clips, GPU-Accelerated</p>
+
+  <div class="features" role="list">
+    <div class="feature" role="listitem"><span class="feature-dot"></span> NVENC Encoding</div>
+    <div class="feature" role="listitem"><span class="feature-dot"></span> Random Clips</div>
+    <div class="feature" role="listitem"><span class="feature-dot"></span> 9:16 Auto-Crop</div>
+  </div>
+
+  <!-- ════════════ HEALTH BANNER ════════════ -->
+  <div class="health-banner" id="health-banner">
+    <div class="health-banner-inner">
+      <span class="health-banner-icon">⚠️</span>
+      <div class="health-banner-text" id="health-banner-text">
+        <strong>Missing Dependencies</strong>
+        <span id="health-banner-msg"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════ MAIN ════════════ -->
+  <main>
+    <div class="card">
+
+      <!-- URL -->
+      <div class="form-group">
+        <label for="url-input">YouTube URL</label>
+        <input type="text" id="url-input" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" aria-label="YouTube video URL" />
+      </div>
+
+      <!-- THUMBNAIL PREVIEW -->
+      <div class="thumb-preview" id="thumb-preview" aria-label="Video thumbnail preview">
+        <img id="thumb-img" src="" alt="Video thumbnail" />
+        <div class="thumb-overlay">
+          <span class="thumb-title" id="thumb-title"></span>
+        </div>
+      </div>
+
+      <!-- BROWSER AUTH -->
+      <div class="browser-auth" id="browser-auth">
+        <div class="browser-auth-icon" id="browser-auth-icon">🔒</div>
+        <div class="browser-auth-body">
+          <div class="browser-auth-label" id="browser-auth-label">YouTube Authentication</div>
+          <div class="browser-auth-hint" id="browser-auth-hint">Select a browser to use its YouTube cookies</div>
+        </div>
+        <select id="browser-select" aria-label="Select browser for YouTube authentication">
+          <option value="">None (no auth)</option>
+        </select>
+        <div class="browser-auth-status" id="browser-auth-status">
+          <span>✓</span> Using cookies
+        </div>
+      </div>
+
+      <!-- MODE TOGGLE -->
+      <label id="mode-label">Clipping Mode</label>
+      <div class="mode-toggle" id="mode-toggle" role="radiogroup" aria-labelledby="mode-label">
+        <div class="mode-slider" id="mode-slider"></div>
+        <button class="mode-btn active" id="btn-manual" data-mode="manual" type="button" role="radio" aria-checked="true">
+          <span class="mode-icon" aria-hidden="true">✂</span> Manual
+        </button>
+        <button class="mode-btn" id="btn-auto" data-mode="auto" type="button" role="radio" aria-checked="false">
+          <span class="mode-icon" aria-hidden="true">🎲</span> Auto-Clip
+        </button>
+      </div>
+
+      <!-- MANUAL FIELDS -->
+      <div class="fields-manual" id="fields-manual">
+        <div id="manual-clips-container">
+          <!-- Clip rows injected here by JS -->
+        </div>
+        <button type="button" id="btn-add-clip" style="margin-top:4px; width:100%; padding: 10px; border-radius: var(--radius-sm); border: 1px dashed var(--border); background: transparent; color: var(--text-mid); cursor: pointer; transition: all var(--transition);">
+          + Add Another Clip
+        </button>
+      </div>
+
+      <!-- AUTO FIELDS -->
+      <div class="fields-auto hidden" id="fields-auto">
+        <div class="form-group">
+          <label for="num-clips">Number of Clips</label>
+          <input type="number" id="num-clips" min="1" max="20" value="3" placeholder="3" aria-label="Number of clips to generate" />
+        </div>
+      </div>
+
+      <!-- SUBMIT -->
+      <button class="btn-primary" id="btn-submit" type="button" aria-label="Start generating clips" title="Press Enter to submit">
+        Generate Clips <span class="shortcut-hint">↵</span>
+      </button>
+
+      <!-- STATUS -->
+      <div class="status-panel hidden" id="status-panel" aria-live="polite">
+        <div class="status-bar">
+          <div class="status-header">
+            <div class="status-left">
+              <div class="status-dot" id="status-dot"></div>
+              <span class="status-label" id="status-label">Processing</span>
+            </div>
+            <span class="elapsed" id="elapsed-time"></span>
+          </div>
+
+          <!-- Step indicators -->
+          <div class="steps" id="step-indicators" aria-label="Processing steps">
+            <div class="step" data-step="downloading" title="Download"></div>
+            <div class="step" data-step="processing" title="Encoding"></div>
+            <div class="step" data-step="zipping" title="Packaging"></div>
+          </div>
+
+          <p class="status-message" id="status-message">Starting…</p>
+          <div class="progress-track">
+            <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+          </div>
+          
+          <div class="activity-log" id="activity-log"></div>
+          
+          <div class="error-hint" id="error-hint">
+            <div class="error-hint-title" id="error-hint-title">💡 Suggestion</div>
+            <div class="error-hint-text" id="error-hint-text"></div>
+          </div>
+
+          <div class="error-details" id="error-details">
+            <strong>Detailed Error Traceback</strong>
+            <pre class="error-traceback" id="error-traceback"></pre>
+          </div>
+        </div>
+
+        <div class="downloads" id="downloads"></div>
+      </div>
+
+      <!-- JOB HISTORY -->
+      <div class="history-section" id="history-section" aria-label="Previous jobs">
+        <div class="history-title">
+          <span>📋</span> Recent Jobs
+          <button class="btn-clear-all" id="btn-clear-all" title="Delete all jobs and free disk space" aria-label="Clear all jobs">✕ Clear All</button>
+        </div>
+        <div class="history-list" id="history-list"></div>
+      </div>
+
+    </div>
+  </main>
+
+  <footer>
+    Built with 💚 by <span>Clipify</span> — Powered by FFmpeg NVENC &amp; yt-dlp
+  </footer>
+
+  <!-- ════════════ SCRIPT ════════════ -->
+  <script>
+  (() => {
+    'use strict';
+
+    // ── DOM refs ──
+    const $ = id => document.getElementById(id);
+    const urlInput      = $('url-input');
+    const thumbPreview  = $('thumb-preview');
+    const thumbImg      = $('thumb-img');
+    const thumbTitle    = $('thumb-title');
+    const btnManual     = $('btn-manual');
+    const btnAuto       = $('btn-auto');
+    const slider        = $('mode-slider');
+    const modeLabel     = $('mode-label');
+    const modeToggle    = $('mode-toggle');
+    const fieldsManual  = $('fields-manual');
+    const fieldsAuto    = $('fields-auto');
+    const manualClipsContainer = $('manual-clips-container');
+    const btnAddClip    = $('btn-add-clip');
+    const numClips      = $('num-clips');
+    const btnSubmit     = $('btn-submit');
+    const statusPanel   = $('status-panel');
+    const statusDot     = $('status-dot');
+    const statusLabel   = $('status-label');
+    const statusMsg     = $('status-message');
+    const progressFill  = $('progress-fill');
+    const activityLog   = $('activity-log');
+    const errorDetails  = $('error-details');
+    const errorTrace    = $('error-traceback');
+    const errorHint     = $('error-hint');
+    const errorHintTitle= $('error-hint-title');
+    const errorHintText = $('error-hint-text');
+    const downloads     = $('downloads');
+    const elapsedEl     = $('elapsed-time');
+    const stepIndicators= $('step-indicators');
+    const historySection= $('history-section');
+    const historyList   = $('history-list');
+    const healthBanner  = $('health-banner');
+    const healthBannerMsg=$('health-banner-msg');
+    const healthBannerText=$('health-banner-text');
+    const browserAuth   = $('browser-auth');
+    const browserSelect = $('browser-select');
+    const browserAuthIcon = $('browser-auth-icon');
+    const browserAuthLabel = $('browser-auth-label');
+    const browserAuthHint = $('browser-auth-hint');
+    const browserAuthStatus = $('browser-auth-status');
+    const btnClearAll   = $('btn-clear-all');
+
+    let currentMode  = 'manual';
+    let pollTimer    = null;
+    let elapsedTimer = null;
+    let jobStartTime = null;
+    let isSubmitting = false;
+
+    // ══════════════════ HEALTH CHECK ON LOAD ══════════════════
+    async function checkHealth() {
+      try {
+        const res = await fetch('/api/health');
+        const data = await res.json();
+
+        if (data.status === 'degraded') {
+          const missing = [];
+          for (const [name, info] of Object.entries(data.tools)) {
+            if (!info.found) missing.push(name);
+          }
+          if (missing.length > 0) {
+            const msgs = missing.map(name => {
+              if (name === 'yt-dlp') return `<code>yt-dlp</code> — Install with: <code>pip install yt-dlp</code>`;
+              return `<code>${name}</code> — Download from <code>ffmpeg.org</code>`;
+            });
+            healthBannerMsg.innerHTML = 'The following tools are missing:<br>' + msgs.join('<br>');
+            healthBanner.classList.add('visible');
+          }
+        }
+
+        // Update NVENC feature indicator
+        if (data.nvenc === false) {
+          const nvencFeature = document.querySelector('.feature:first-child');
+          if (nvencFeature) {
+            nvencFeature.querySelector('.feature-dot').style.background = 'var(--text-dim)';
+            nvencFeature.querySelector('.feature-dot').style.boxShadow = 'none';
+            nvencFeature.innerHTML = '<span class="feature-dot" style="background:var(--text-dim);box-shadow:none"></span> CPU Encoding';
+          }
+        }
+      } catch {
+        // Server not reachable — ignore
+      }
+    }
+    checkHealth();
+
+    // ══════════════════ BROWSER AUTH ══════════════════
+    async function loadBrowsers() {
+      try {
+        const res = await fetch('/api/auth/browsers');
+        const data = await res.json();
+        if (data.browsers && data.browsers.length > 0) {
+          data.browsers.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b;
+            // Capitalize first letter
+            opt.textContent = b.charAt(0).toUpperCase() + b.slice(1);
+            browserSelect.appendChild(opt);
+          });
+        } else {
+          browserAuth.classList.add('no-browsers');
+          browserAuthHint.textContent = 'No browsers detected on this system';
+        }
+      } catch {
+        browserAuth.classList.add('no-browsers');
+        browserAuthHint.textContent = 'Could not detect browsers';
+      }
+    }
+    loadBrowsers();
+
+    browserSelect.addEventListener('change', () => {
+      const val = browserSelect.value;
+      if (val) {
+        browserAuth.classList.add('authenticated');
+        browserAuthIcon.textContent = '🔓';
+        browserAuthLabel.textContent = 'Authenticated via ' + val.charAt(0).toUpperCase() + val.slice(1);
+        browserAuthHint.textContent = 'YouTube cookies will be used for downloads';
+      } else {
+        browserAuth.classList.remove('authenticated');
+        browserAuthIcon.textContent = '🔒';
+        browserAuthLabel.textContent = 'YouTube Authentication';
+        browserAuthHint.textContent = 'Select a browser to use its YouTube cookies';
+      }
+    });
+
+    // ══════════════════ CLEAR ALL JOBS ══════════════════
+    if (btnClearAll) {
+      btnClearAll.addEventListener('click', async () => {
+        if (!confirm('Delete all jobs and free disk space?')) return;
+        try {
+          const res = await fetch('/api/cleanup', { method: 'DELETE' });
+          const data = await res.json();
+          showToast(`Cleared ${data.folders_removed || 0} job(s) from disk`, 'info');
+          historySection.classList.remove('visible');
+          historyList.innerHTML = '';
+          // Also hide current status panel if no active job
+          if (!pollTimer) {
+            statusPanel.classList.add('hidden');
+          }
+          refreshHistory();
+        } catch {
+          showToast('Failed to clear jobs', 'error');
+        }
+      });
+    }
+
+    // ══════════════════ THUMBNAIL PREVIEW ══════════════════
+    let thumbDebounce = null;
+    urlInput.addEventListener('input', () => {
+      clearTimeout(thumbDebounce);
+      const url = urlInput.value.trim();
+      const match = url.match(/(?:v=|youtu\.be\/|shorts\/)([\w-]{11})/);
+      if (match) {
+        thumbDebounce = setTimeout(() => {
+          const vid = match[1];
+          thumbImg.src = `https://img.youtube.com/vi/${vid}/hqdefault.jpg`;
+          thumbImg.onload = () => {
+            thumbPreview.classList.add('visible');
+            thumbTitle.textContent = '';  // title comes later from backend
+          };
+          thumbImg.onerror = () => thumbPreview.classList.remove('visible');
+        }, 400);
+      } else {
+        thumbPreview.classList.remove('visible');
+      }
+    });
+
+    // ══════════════════ MODE TOGGLE ══════════════════
+    function setMode(mode) {
+      currentMode = mode;
+      const isManual = mode === 'manual';
+      btnManual.classList.toggle('active', isManual);
+      btnAuto.classList.toggle('active', !isManual);
+      btnManual.setAttribute('aria-checked', isManual);
+      btnAuto.setAttribute('aria-checked', !isManual);
+      slider.classList.toggle('right', !isManual);
+      fieldsManual.classList.toggle('hidden', !isManual);
+      fieldsAuto.classList.toggle('hidden', isManual);
+
+      // Update step indicators visibility
+      const zipStep = stepIndicators.querySelector('[data-step="zipping"]');
+      if (isManual) {
+        zipStep.style.display = 'none';
+      } else {
+        zipStep.style.display = '';
+      }
+    }
+
+    btnManual.addEventListener('click', () => setMode('manual'));
+    btnAuto.addEventListener('click', () => setMode('auto'));
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+        const active = document.activeElement;
+        if (active === urlInput || active === numClips || active.classList.contains('start-h') || active.classList.contains('start-m') || active.classList.contains('start-s') || active.classList.contains('end-h') || active.classList.contains('end-m') || active.classList.contains('end-s')) {
+          e.preventDefault();
+          btnSubmit.click();
+        }
+      }
+    });
+
+    // ══════════════════ DYNAMIC CLIP ROWS ══════════════════
+    function createClipRow(isFirst = false) {
+      const row = document.createElement('div');
+      row.className = 'time-row manual-clip-row';
+      row.style.position = 'relative';
+      row.style.marginBottom = '12px';
+      
+      row.innerHTML = `
+        <div class="form-group">
+          <label>Start Time</label>
+          <div style="display:flex; gap:4px; align-items:center;">
+            <input type="number" class="start-h" min="0" max="99" placeholder="HH" aria-label="Start Hours" style="width:30%; text-align:center; padding:10px 4px;" />
+            <span>:</span>
+            <input type="number" class="start-m" min="0" max="59" placeholder="MM" aria-label="Start Minutes" style="width:30%; text-align:center; padding:10px 4px;" />
+            <span>:</span>
+            <input type="number" class="start-s" min="0" max="59" placeholder="SS" aria-label="Start Seconds" style="width:30%; text-align:center; padding:10px 4px;" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>End Time</label>
+          <div style="display:flex; gap:4px; align-items:center;">
+            <input type="number" class="end-h" min="0" max="99" placeholder="HH" aria-label="End Hours" style="width:30%; text-align:center; padding:10px 4px;" />
+            <span>:</span>
+            <input type="number" class="end-m" min="0" max="59" placeholder="MM" aria-label="End Minutes" style="width:30%; text-align:center; padding:10px 4px;" />
+            <span>:</span>
+            <input type="number" class="end-s" min="0" max="59" placeholder="SS" aria-label="End Seconds" style="width:30%; text-align:center; padding:10px 4px;" />
+          </div>
+        </div>
+        ${!isFirst ? `<button type="button" class="btn-remove-clip" title="Remove Clip" style="position:absolute; right:-28px; top:32px; background:none; border:none; color:var(--danger); cursor:pointer; font-size:1.1rem; padding:0;">✖</button>` : ''}
+      `;
+      
+      if (!isFirst) {
+        row.querySelector('.btn-remove-clip').addEventListener('click', () => row.remove());
+      }
+      
+      manualClipsContainer.appendChild(row);
+    }
+    
+    // Initialize first row
+    createClipRow(true);
+    
+    btnAddClip.addEventListener('click', () => createClipRow(false));
+    
+    // Hover effect for add button
+    btnAddClip.addEventListener('mouseenter', () => btnAddClip.style.borderColor = 'var(--accent)');
+    btnAddClip.addEventListener('mouseleave', () => btnAddClip.style.borderColor = 'var(--border)');
+
+    // ══════════════════ PROGRESS MAPPING ══════════════════
+    const PROGRESS_MAP = {
+      queued:           5,
+      downloading:      25,
+      processing:       65,
+      zipping:          92,
+      done:             100,
+      failed:           100,
+    };
+
+    const STEP_ORDER = ['downloading', 'processing', 'zipping'];
+
+    function updateStepIndicators(currentStatus) {
+      const idx = STEP_ORDER.indexOf(currentStatus);
+      stepIndicators.querySelectorAll('.step').forEach(el => {
+        const stepName = el.dataset.step;
+        const stepIdx  = STEP_ORDER.indexOf(stepName);
+        el.classList.remove('active', 'done', 'error');
+        if (currentStatus === 'failed') {
+          if (stepIdx <= idx) el.classList.add('error');
+        } else if (currentStatus === 'done') {
+          el.classList.add('done');
+        } else if (stepIdx < idx) {
+          el.classList.add('done');
+        } else if (stepIdx === idx) {
+          el.classList.add('active');
+        }
+      });
+    }
+
+    // ══════════════════ ELAPSED TIMER ══════════════════
+    function startElapsedTimer() {
+      jobStartTime = Date.now();
+      if (elapsedTimer) clearInterval(elapsedTimer);
+      elapsedTimer = setInterval(() => {
+        const sec = Math.floor((Date.now() - jobStartTime) / 1000);
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        elapsedEl.textContent = `${m}:${String(s).padStart(2, '0')}`;
+      }, 1000);
+    }
+
+    function stopElapsedTimer() {
+      if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+    }
+
+    // ══════════════════ USER-FRIENDLY ERROR PARSING ══════════════════
+    function parseErrorHint(errorMsg) {
+      if (!errorMsg) return null;
+      const lower = errorMsg.toLowerCase();
+
+      if (lower.includes('yt-dlp') && (lower.includes('not found') || lower.includes('not installed'))) {
+        return {
+          title: '🔧 yt-dlp Not Installed',
+          text: 'yt-dlp is required to download YouTube videos. Install it by running:\npip install yt-dlp\nThen restart the Clipify server.',
+        };
+      }
+      if (lower.includes('ffmpeg') && (lower.includes('not found') || lower.includes('not installed'))) {
+        return {
+          title: '🔧 FFmpeg Not Installed',
+          text: 'FFmpeg is required for video encoding. Download it from ffmpeg.org and add it to your system PATH.',
+        };
+      }
+      if (lower.includes('age verification') || lower.includes('sign-in') || lower.includes('sign in')) {
+        return {
+          title: '🔒 Age-Restricted Video',
+          text: 'This video requires sign-in for age verification. Try using a different video, or configure yt-dlp with browser cookies.',
+        };
+      }
+      if (lower.includes('private')) {
+        return {
+          title: '🔒 Private Video',
+          text: 'This video is private and cannot be accessed. Make sure the video is public or unlisted.',
+        };
+      }
+      if (lower.includes('unavailable') || lower.includes('region')) {
+        return {
+          title: '🌍 Video Unavailable',
+          text: 'This video may have been removed or is not available in your region. Try a different URL.',
+        };
+      }
+      if (lower.includes('rate limit') || lower.includes('429') || lower.includes('too many')) {
+        return {
+          title: '⏳ Rate Limited',
+          text: 'YouTube is temporarily blocking requests. Wait a few minutes before trying again.',
+        };
+      }
+      if (lower.includes('timed out') || lower.includes('timeout')) {
+        return {
+          title: '⏱️ Operation Timed Out',
+          text: 'The download or encoding took too long. This may be due to a slow network or a very large video. Try again or use a shorter video.',
+        };
+      }
+      if (lower.includes('not a valid youtube')) {
+        return {
+          title: '🔗 Invalid URL',
+          text: 'Please enter a valid YouTube URL (e.g., https://www.youtube.com/watch?v=... or https://youtu.be/...)',
+        };
+      }
+      return null;
+    }
+
+    // ══════════════════ SUBMIT ══════════════════
+    btnSubmit.addEventListener('click', async () => {
+      // Guard against double-submit
+      if (isSubmitting) return;
+
+      const url = urlInput.value.trim();
+      if (!url) { shakeInput(urlInput); return; }
+
+      const body = { url, mode: currentMode };
+      if (currentMode === 'manual') {
+        const rows = document.querySelectorAll('.manual-clip-row');
+        const clips = [];
+        for (const row of rows) {
+          const sh = row.querySelector('.start-h').value || '0';
+          const sm = row.querySelector('.start-m').value || '0';
+          const ss = row.querySelector('.start-s').value || '0';
+          
+          const eh = row.querySelector('.end-h').value || '0';
+          const em = row.querySelector('.end-m').value || '0';
+          const es = row.querySelector('.end-s').value || '0';
+
+          const start = `${sh.padStart(2, '0')}:${sm.padStart(2, '0')}:${ss.padStart(2, '0')}`;
+          const end = `${eh.padStart(2, '0')}:${em.padStart(2, '0')}:${es.padStart(2, '0')}`;
+          
+          if (start === '00:00:00' && end === '00:00:00') {
+            shakeInput(row.querySelector('.start-s'));
+            showToast('Please provide valid start and end times', 'error');
+            return;
+          }
+          clips.push({ start: start, end: end });
+        }
+        if (clips.length === 0) {
+           showToast('Please add at least one clip', 'error');
+           return;
+        }
+        body.clips = clips;
+      } else {
+        body.num_clips = parseInt(numClips.value) || 3;
+      }
+
+      // Include selected browser for cookie auth
+      const selectedBrowser = browserSelect.value;
+      if (selectedBrowser) {
+        body.browser = selectedBrowser;
+      }
+
+      // Lock UI
+      isSubmitting = true;
+      btnSubmit.disabled = true;
+      btnSubmit.innerHTML = '<span class="spinner"></span> Processing…';
+      statusPanel.classList.remove('hidden');
+      statusDot.className = 'status-dot';
+      statusLabel.className = 'status-label';
+      statusLabel.textContent = 'Starting';
+      statusMsg.textContent = 'Submitting job…';
+      progressFill.style.width = '5%';
+      progressFill.style.background = '';
+      activityLog.innerHTML = '';
+      activityLog.classList.remove('visible');
+      errorDetails.classList.remove('visible');
+      errorHint.classList.remove('visible');
+      errorTrace.textContent = '';
+      downloads.innerHTML = '';
+      updateStepIndicators('queued');
+      startElapsedTimer();
+
+      try {
+        const res = await fetch('/api/clip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Request failed');
+        }
+        const data = await res.json();
+        startPolling(data.job_id);
+      } catch (e) {
+        showError(e.message);
+        stopElapsedTimer();
+        isSubmitting = false;
+      }
+    });
+
+    // ══════════════════ POLLING ══════════════════
+    function startPolling(jobId) {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async () => {
+        try {
+          const res  = await fetch(`/api/status/${jobId}`);
+          const data = await res.json();
+          updateStatus(data);
+          if (data.status === 'done' || data.status === 'failed') {
+            clearInterval(pollTimer);
+            pollTimer = null;
+            stopElapsedTimer();
+            resetButton();
+            isSubmitting = false;
+            refreshHistory();
+            if (data.status === 'done') {
+              const mp4Count = data.clips.filter(c => c.endsWith('.mp4')).length;
+              showToast(`${mp4Count} clip(s) ready!`, 'success');
+              launchConfetti();
+            }
+          }
+        } catch {
+          // network blip — keep polling
+        }
+      }, 1200);
+    }
+
+    function updateStatus(data) {
+      const pct = PROGRESS_MAP[data.status] || 10;
+      progressFill.style.width = pct + '%';
+      statusLabel.textContent = formatStatus(data.status);
+      statusMsg.textContent   = data.progress || '';
+      updateStepIndicators(data.status);
+
+      // Update thumbnail title if available
+      if (data.video_title && thumbTitle) {
+        thumbTitle.textContent = data.video_title;
+      }
+
+      // Render activity logs
+      if (data.logs && data.logs.length > 0) {
+        activityLog.classList.add('visible');
+        const shouldScroll = activityLog.scrollHeight - activityLog.scrollTop <= activityLog.clientHeight + 10;
+        
+        activityLog.innerHTML = data.logs.map(l => {
+          const m = l.match(/^(\[\d{2}:\d{2}:\d{2}\])\s*(.*)$/);
+          if (m) {
+            return `<div class="log-entry"><span class="log-ts">${m[1]}</span> <span class="log-msg">${escapeHtml(m[2])}</span></div>`;
+          }
+          return `<div class="log-entry">${escapeHtml(l)}</div>`;
+        }).join('');
+        
+        if (shouldScroll) {
+          activityLog.scrollTop = activityLog.scrollHeight;
+        }
+      }
+
+      if (data.status === 'failed') {
+        statusDot.classList.add('error');
+        statusLabel.classList.add('error');
+        statusMsg.textContent = data.error || 'Something went wrong.';
+        progressFill.style.background = 'var(--danger)';
+        
+        // Show user-friendly error hint
+        const hint = parseErrorHint(data.error);
+        if (hint) {
+          errorHintTitle.textContent = hint.title;
+          errorHintText.textContent = hint.text;
+          errorHint.classList.add('visible');
+        }
+
+        // Highlight browser auth widget on cookie-related errors
+        if (data.error && (data.error.toLowerCase().includes('cookie') || data.error.toLowerCase().includes('browser') || data.error.toLowerCase().includes('dpapi'))) {
+          browserAuth.style.borderColor = 'var(--warning)';
+          browserAuth.style.boxShadow = '0 0 0 3px rgba(255,170,34,.15)';
+          browserAuth.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(() => {
+            browserAuth.style.borderColor = '';
+            browserAuth.style.boxShadow = '';
+          }, 4000);
+        }
+
+        if (data.error_detail) {
+          errorTrace.textContent = data.error_detail;
+          errorDetails.classList.add('visible');
+        }
+
+        // Add retry button
+        if (!downloads.querySelector('.btn-retry')) {
+          const btn = document.createElement('button');
+          btn.className = 'btn-retry';
+          btn.textContent = '↻ Retry';
+          btn.onclick = () => {
+            statusPanel.classList.add('hidden');
+            progressFill.style.background = '';
+            errorHint.classList.remove('visible');
+            resetButton();
+            // Small delay so the panel hides before re-showing
+            setTimeout(() => btnSubmit.click(), 150);
+          };
+          downloads.appendChild(btn);
+        }
+        showToast('Processing failed — check the error below', 'error');
+      }
+
+      if (data.status === 'done') {
+        statusDot.classList.add('done');
+        renderDownloads(data.clips);
+      }
+    }
+
+    function formatStatus(s) {
+      return {
+        queued:           'Queued',
+        downloading:      'Downloading',
+        processing:       'Encoding Clips',
+        zipping:          'Packaging',
+        done:             'Complete',
+        failed:           'Failed',
+      }[s] || s;
+    }
+
+    function renderDownloads(clips) {
+      downloads.innerHTML = '';
+      clips.forEach((url, idx) => {
+        const name  = decodeURIComponent(url.split('/').pop());
+        const isZip = name.endsWith('.zip');
+        const a = document.createElement('a');
+        a.href = url;
+        a.className = 'dl-link';
+        a.download = name;
+
+        const displayName = name.length > 40 ? name.slice(0, 37) + '…' : name;
+        const labelSpan = document.createElement('span');
+        labelSpan.textContent = isZip ? 'Download All (ZIP)' : displayName;
+
+        a.innerHTML = `
+          <span class="dl-icon">${isZip ? '📦' : '🎬'}</span>
+          <span class="dl-badge">${isZip ? 'ZIP' : 'MP4'}</span>
+        `;
+        // Insert escaped text node before the badge
+        a.insertBefore(labelSpan, a.querySelector('.dl-badge'));
+        a.style.animation = `fadeSlideIn .4s ease ${idx * .1}s both`;
+        downloads.appendChild(a);
+      });
+    }
+
+    // ══════════════════ TOAST SYSTEM ══════════════════
+    function showToast(message, type = 'info') {
+      const container = $('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 4200);
+    }
+
+    // ══════════════════ CONFETTI ══════════════════
+    function launchConfetti() {
+      const canvas = document.createElement('canvas');
+      canvas.className = 'confetti-canvas';
+      document.body.appendChild(canvas);
+      const ctx = canvas.getContext('2d');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      const colors = ['#00ff88', '#00ddaa', '#00ccdd', '#66ffbb', '#ffaa22', '#ff4466', '#3388ff'];
+      const particles = Array.from({ length: 80 }, () => ({
+        x: Math.random() * canvas.width,
+        y: -20 - Math.random() * 200,
+        w: 6 + Math.random() * 6,
+        h: 4 + Math.random() * 4,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        vx: (Math.random() - 0.5) * 4,
+        vy: 2 + Math.random() * 4,
+        rot: Math.random() * Math.PI * 2,
+        vr: (Math.random() - 0.5) * 0.2,
+        opacity: 1,
+      }));
+
+      let frame = 0;
+      function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        let alive = false;
+        for (const p of particles) {
+          p.x  += p.vx;
+          p.y  += p.vy;
+          p.vy += 0.08;
+          p.rot += p.vr;
+          if (frame > 40) p.opacity -= 0.015;
+
+          if (p.opacity > 0 && p.y < canvas.height + 20) {
+            alive = true;
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rot);
+            ctx.globalAlpha = Math.max(0, p.opacity);
+            ctx.fillStyle = p.color;
+            ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+            ctx.restore();
+          }
+        }
+        frame++;
+        if (alive && frame < 180) {
+          requestAnimationFrame(animate);
+        } else {
+          canvas.remove();
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+
+    // ══════════════════ JOB HISTORY ══════════════════
+    async function refreshHistory() {
+      try {
+        const res = await fetch('/api/jobs');
+        const jobs = await res.json();
+        if (jobs.length === 0) {
+          historySection.classList.remove('visible');
+          return;
+        }
+        historySection.classList.add('visible');
+        historyList.innerHTML = '';
+        // Show last 5 completed/failed jobs
+        const past = jobs.filter(j => j.status === 'done' || j.status === 'failed').slice(0, 5);
+        for (const job of past) {
+          const item = document.createElement('div');
+          item.className = 'history-item';
+          const dotClass = job.status === 'done' ? 'done' : 'failed';
+          const title = job.video_title || job.job_id.slice(0, 16);
+          const clipCount = job.clips ? job.clips.filter(c => c.endsWith('.mp4')).length : 0;
+          item.innerHTML = `
+            <div class="history-dot ${dotClass}"></div>
+            <div class="history-info">
+              <div class="history-name">${escapeHtml(title)}</div>
+              <div class="history-meta">${clipCount} clip(s) · ${job.status}</div>
+            </div>
+            <button class="history-delete" title="Delete" data-job="${escapeHtml(job.job_id)}" aria-label="Delete job">✕</button>
+          `;
+          // Click download links for completed jobs
+          if (job.status === 'done' && job.clips.length > 0) {
+            item.style.cursor = 'pointer';
+            const info = item.querySelector('.history-info');
+            info.addEventListener('click', () => {
+              // Reset status panel state before showing history job
+              statusDot.className = 'status-dot';
+              statusLabel.className = 'status-label';
+              progressFill.style.background = '';
+              activityLog.innerHTML = '';
+              activityLog.classList.remove('visible');
+              errorDetails.classList.remove('visible');
+              errorHint.classList.remove('visible');
+              downloads.innerHTML = '';
+              statusPanel.classList.remove('hidden');
+              updateStatus(job);
+              renderDownloads(job.clips);
+            });
+          }
+          // Delete handler
+          item.querySelector('.history-delete').addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const jid = e.currentTarget.dataset.job;
+            await fetch(`/api/job/${jid}`, { method: 'DELETE' });
+            refreshHistory();
+            showToast('Job deleted', 'info');
+          });
+          historyList.appendChild(item);
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Load history on page load
+    refreshHistory();
+
+    // ══════════════════ HELPERS ══════════════════
+    function showError(msg) {
+      statusPanel.classList.remove('hidden');
+      statusDot.classList.add('error');
+      statusLabel.classList.add('error');
+      statusLabel.textContent = 'Error';
+      statusMsg.textContent = msg;
+      progressFill.style.width = '100%';
+      progressFill.style.background = 'var(--danger)';
+      updateStepIndicators('failed');
+
+      // Show hint for the error
+      const hint = parseErrorHint(msg);
+      if (hint) {
+        errorHintTitle.textContent = hint.title;
+        errorHintText.textContent = hint.text;
+        errorHint.classList.add('visible');
+      }
+
+      resetButton();
+    }
+
+    function resetButton() {
+      btnSubmit.disabled = false;
+      btnSubmit.innerHTML = 'Generate Clips <span class="shortcut-hint">↵</span>';
+      isSubmitting = false;
+    }
+
+    function shakeInput(el) {
+      el.style.borderColor = 'var(--danger)';
+      el.style.animation = 'shake .4s ease';
+      el.focus();
+      setTimeout(() => {
+        el.style.borderColor = '';
+        el.style.animation = '';
+      }, 500);
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // Initialize mode to set step indicators correctly
+    setMode('manual');
+  })();
+  </script>
+
+</body>
+</html>
