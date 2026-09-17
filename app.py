@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 
-# ──────────────────────────── logging ──────────────────────────
+# Logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s │ %(levelname)-7s │ %(message)s",
@@ -33,7 +33,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("clipify")
 
-# ──────────────────────────── paths ────────────────────────────
+# Paths
 BASE_DIR = Path(__file__).resolve().parent
 DOWNLOADS_DIR = BASE_DIR / "downloads"
 STATIC_DIR = BASE_DIR / "static"
@@ -41,7 +41,7 @@ DOWNLOADS_DIR.mkdir(exist_ok=True)
 STATIC_DIR.mkdir(exist_ok=True)
 
 
-# ──────────────────────────── startup cleanup ──────────────────
+# Startup cleanup
 _JOB_MAX_AGE_HOURS = 48
 
 def _cleanup_old_job_dirs() -> None:
@@ -69,7 +69,7 @@ def _cleanup_old_job_dirs() -> None:
 _cleanup_old_job_dirs()
 
 
-# ──────────────────────────── tool resolution ──────────────────
+# Tool resolution
 # Resolve yt-dlp, ffmpeg, ffprobe to absolute paths at import time.
 # This is the bulletproof fix for the yt-dlp RuntimeError: the exe lives
 # in the user-scripts dir which isn't on the system PATH, so we search
@@ -138,7 +138,7 @@ FFMPEG_PATH: Optional[str] = _TOOLS.get("ffmpeg")
 FFPROBE_PATH: Optional[str] = _TOOLS.get("ffprobe")
 
 
-# ──────────────────────────── browser cookie support ───────────
+# Browser cookie support
 # YouTube often requires cookies to avoid "Sign in to confirm you're not a bot".
 # We auto-detect installed browsers and let the user pick one.
 
@@ -201,14 +201,14 @@ def _require_tool(name: str) -> str:
     return path
 
 
-# ──────────────────────────── app ──────────────────────────────
+# App
 app = FastAPI(title="Clipify", version="2.1.0")
 
 # Serve static assets
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
-# ──────────────────────────── models ───────────────────────────
+# Models
 class JobStatus(str, Enum):
     QUEUED = "queued"
     DOWNLOADING = "downloading"
@@ -266,7 +266,7 @@ jobs: dict[str, JobInfo] = {}
 _job_start: dict[str, datetime] = {}
 
 
-# ──────────────────────────── helpers ──────────────────────────
+# Helpers
 def _ts_to_seconds(ts: str) -> float:
     """Convert HH:MM:SS or MM:SS or SS to seconds.  Raises ValueError on bad input."""
     try:
@@ -360,7 +360,7 @@ def _sanitize_filename(name: str) -> str:
     return cleaned if cleaned else "clip"
 
 
-# ──────────────────────────── NVENC detection ──────────────────
+# Nvenc detection
 _nvenc_available: Optional[bool] = None
 
 def _check_nvenc() -> bool:
@@ -384,7 +384,7 @@ def _check_nvenc() -> bool:
     return _nvenc_available
 
 
-# ──────────────────────────── core pipeline ────────────────────
+# Core pipeline
 
 def fetch_video_info(url: str, browser: Optional[str] = None) -> dict:
     """Fetch video metadata (title, thumbnail, duration) via --dump-json."""
@@ -664,7 +664,7 @@ def crop_clip(
             raise  # CPU encoding also failed — bail out
         log.warning("NVENC failed on this clip, falling back to libx264")
 
-    # ── libx264 fallback ──
+    # Libx264 fallback
     cmd_fallback = _build_ffmpeg_cmd(source, output, start_sec, duration, use_nvenc=False)
     _run(cmd_fallback, timeout=600)
 
@@ -740,7 +740,7 @@ def _update_elapsed(job_id: str) -> None:
         )
 
 
-# ──────────────────────────── unified pipeline ─────────────────
+# Unified pipeline
 
 def _process_job(
     job_id: str,
@@ -766,7 +766,7 @@ def _process_job(
     _log_to_job(job_id, f"URL: {url}")
 
     try:
-        # ── 0. Fetch metadata ──
+        # 0. fetch metadata
         try:
             _log_to_job(job_id, "Fetching video metadata…")
             info = fetch_video_info(url, browser=browser)
@@ -835,7 +835,7 @@ def _process_job(
             for idx, (s_str, e_str, s_sec, e_sec) in enumerate(clip_segments, 1):
                 clip_duration = e_sec - s_sec
 
-                # ── Download just this section ──
+                # Download just this section
                 job.status = JobStatus.DOWNLOADING
                 job.progress = f"Downloading clip {idx}/{total} ({s_str} → {e_str})…"
                 _log_to_job(job_id, f"Downloading clip {idx}/{total}: {s_str} → {e_str} ({clip_duration:.1f}s)")
@@ -847,7 +847,7 @@ def _process_job(
                 sec_size = section_path.stat().st_size / 1e6
                 _log_to_job(job_id, f"  Section downloaded: {sec_size:.1f} MB")
 
-                # ── Crop to 9:16 vertical ──
+                # Crop to 9:16 vertical
                 job.status = JobStatus.PROCESSING
                 job.progress = f"Cropping clip {idx}/{total} to 9:16 ({encoder})…"
                 _log_to_job(job_id, f"Cropping clip {idx}/{total} to 9:16 vertical…")
@@ -859,11 +859,11 @@ def _process_job(
                 _log_to_job(job_id, f"  → {clip_name} ({out_size:.1f} MB)")
                 clip_paths.append(clip_path)
 
-                # ── Delete the section source immediately ──
+                # Delete the section source immediately
                 section_path.unlink(missing_ok=True)
                 _log_to_job(job_id, f"  Cleaned up section source")
 
-        # ── 5. Package ──
+        # 5. package
         if len(clip_paths) > 1:
             job.status = JobStatus.ZIPPING
             job.progress = "Packaging clips into ZIP…"
@@ -922,7 +922,7 @@ def process_auto(job_id: str, url: str, num_clips: int, browser: Optional[str] =
     _process_job(job_id, url, num_auto_clips=num_clips, browser=browser)
 
 
-# ──────────────────────────── API routes ───────────────────────
+# Api routes
 
 @app.get("/")
 async def serve_index():
@@ -1066,7 +1066,7 @@ async def cleanup_all_jobs():
     return {"detail": "all jobs deleted", "jobs_removed": count, "folders_removed": disk_count}
 
 
-# ──────────────────────────── entrypoint ───────────────────────
+# Entrypoint
 if __name__ == "__main__":
     import uvicorn
 

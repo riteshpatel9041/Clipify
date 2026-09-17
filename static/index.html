@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <style>
-    /* ═══════════════════ RESET & TOKENS ═══════════════════ */
+    /* Reset & Tokens */
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
@@ -51,7 +51,7 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ═══════════════════ AMBIENT BACKGROUND ═══════════════════ */
+    /* Ambient Background */
     body::before {
       content: '';
       position: fixed; inset: 0; z-index: -1;
@@ -75,7 +75,7 @@
       pointer-events: none;
     }
 
-    /* ═══════════════════ HEALTH BANNER ═══════════════════ */
+    /* Health Banner */
     .health-banner {
       width: 100%;
       max-width: 600px;
@@ -117,7 +117,7 @@
       font-size: .78rem;
     }
 
-    /* ═══════════════════ HEADER ═══════════════════ */
+    /* Header */
     header {
       width: 100%;
       padding: 32px 40px 0;
@@ -167,7 +167,7 @@
       letter-spacing: .2px;
     }
 
-    /* ═══════════════════ FEATURES STRIP ═══════════════════ */
+    /* Features Strip */
     .features {
       display: flex;
       justify-content: center;
@@ -192,7 +192,7 @@
       box-shadow: 0 0 10px var(--accent);
     }
 
-    /* ═══════════════════ MAIN CARD ═══════════════════ */
+    /* Main Card */
     main {
       width: 100%;
       max-width: 600px;
@@ -214,7 +214,7 @@
       opacity: .4;
     }
 
-    /* ═══════════════════ FORM ELEMENTS ═══════════════════ */
+    /* Form Elements */
     label {
       display: block;
       font-size: .72rem;
@@ -249,7 +249,7 @@
 
     .form-group { margin-bottom: 22px; }
 
-    /* ═══════════════════ THUMBNAIL PREVIEW ═══════════════════ */
+    /* Thumbnail Preview */
     .thumb-preview {
       margin-bottom: 22px;
       border-radius: var(--radius);
@@ -280,7 +280,7 @@
       text-shadow: 0 1px 4px rgba(0,0,0,.5);
     }
 
-    /* ═══════════════════ MODE TOGGLE ═══════════════════ */
+    /* Mode Toggle */
     .mode-toggle {
       display: flex;
       background: var(--bg-input);
@@ -326,7 +326,7 @@
     }
     .mode-icon { font-size: 1.05rem; }
 
-    /* ═══════════════════ CONDITIONAL FIELDS ═══════════════════ */
+    /* Conditional Fields */
     .fields-manual,
     .fields-auto {
       overflow: hidden;
@@ -350,7 +350,7 @@
     }
     .time-row > .form-group { flex: 1; }
 
-    /* ═══════════════════ SUBMIT BUTTON ═══════════════════ */
+    /* Submit Button */
     .btn-primary {
       width: 100%;
       padding: 16px 24px;
@@ -400,7 +400,7 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ═══════════════════ STATUS PANEL ═══════════════════ */
+    /* Status Panel */
     .status-panel {
       margin-top: 26px;
       overflow: hidden;
@@ -464,7 +464,7 @@
       margin-bottom: 14px;
     }
 
-    /* ═══════════════════ STEP INDICATORS ═══════════════════ */
+    /* Step Indicators */
     .steps {
       display: flex;
       gap: 6px;
@@ -518,7 +518,7 @@
       100% { opacity: 0; }
     }
 
-    /* ═══════════════════ ACTIVITY LOG & ERROR DETAILS ═══════════════════ */
+    /* Activity Log & Error Details */
     .activity-log {
       margin-top: 18px;
       padding: 14px;
@@ -575,7 +575,7 @@
       margin: 0;
     }
 
-    /* ═══════════════════ USER-FRIENDLY ERROR BOX ═══════════════════ */
+    /* User-Friendly Error Box */
     .error-hint {
       margin-top: 10px;
       padding: 12px 14px;
@@ -597,7 +597,7 @@
       line-height: 1.5;
     }
 
-    /* ═══════════════════ DOWNLOAD LINKS ═══════════════════ */
+    /* Download Links */
     .downloads {
       margin-top: 16px;
       display: flex;
@@ -646,7 +646,7 @@
       color: var(--accent-dim);
     }
 
-    /* ═══════════════════ RETRY BUTTON ═══════════════════ */
+    /* Retry Button */
     .btn-retry {
       margin-top: 14px;
       padding: 10px 20px;
@@ -665,7 +665,7 @@
       transform: translateY(-1px);
     }
 
-    /* ═══════════════════ TOAST ═══════════════════ */
+    /* Toast */
     .toast-container {
       position: fixed;
       top: 20px; right: 20px;
@@ -698,14 +698,14 @@
       to   { opacity: 0; transform: translateX(40px); }
     }
 
-    /* ═══════════════════ CONFETTI ═══════════════════ */
+    /* Confetti */
     .confetti-canvas {
       position: fixed; inset: 0;
       z-index: 9998;
       pointer-events: none;
     }
 
-    /* ═══════════════════ JOB HISTORY ═══════════════════ */
+    /* Job History */
     .history-section {
       margin-top: 24px;
       display: none;
@@ -802,7 +802,7 @@
       border-color: var(--danger);
     }
 
-    /* ═══════════════════ FOOTER ═══════════════════ */
+    /* Footer */
     footer {
       padding: 24px 20px;
       text-align: center;
@@ -812,7 +812,7 @@
     }
     footer span { color: var(--accent-dim); }
 
-    /* ═══════════════════ ANIMATIONS ═══════════════════ */
+    /* Animations */
     @keyframes fadeSlideIn {
       from { opacity: 0; transform: translateY(10px); }
       to   { opacity: 1; transform: translateY(0); }
@@ -825,7 +825,7 @@
       80%      { transform: translateX(4px); }
     }
 
-    /* ═══════════════════ BROWSER AUTH ═══════════════════ */
+    /* Browser Auth */
     .browser-auth {
       display: flex;
       align-items: center;
@@ -921,7 +921,7 @@
       opacity: 1;
     }
 
-    /* ═══════════════════ RESPONSIVE ═══════════════════ */
+    /* Responsive */
     @media (max-width: 600px) {
       header { padding: 20px 16px 0; }
       .card { padding: 24px 18px; }
@@ -1090,7 +1090,7 @@
   (() => {
     'use strict';
 
-    // ── DOM refs ──
+    // Dom refs
     const $ = id => document.getElementById(id);
     const urlInput      = $('url-input');
     const thumbPreview  = $('thumb-preview');

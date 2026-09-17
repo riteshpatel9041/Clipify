@@ -1,8 +1,8 @@
-# Clipify 🎬
+# Clipify
 
-> **Local YouTube → Vertical Clip Engine**  
-> Download YouTube videos and crop them to 9:16 vertical format for TikTok, Reels, and Shorts.  
-> GPU-accelerated via NVIDIA NVENC, with automatic CPU fallback.
+Local YouTube to Vertical Clip Engine.
+Download YouTube videos and crop them to 9:16 vertical format for TikTok, Reels, and Shorts.
+GPU-accelerated via NVIDIA NVENC, with automatic CPU fallback.
 
 ---
 
